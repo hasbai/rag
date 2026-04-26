@@ -1,11 +1,15 @@
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
-import httpx
+import base64
 import os
 
+import httpx
+import numpy as np
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+
 app = FastAPI()
-UPSTREAM = os.environ.get("UPSTREAM", "http://llama:8080")
+UPSTREAM = os.environ.get("UPSTREAM", "http://localhost:8080")
 PREFIX = os.environ.get("PREFIX", "Document: ")
+
 
 @app.post("/v1/embeddings")
 async def proxy_embeddings(request: Request):
@@ -24,7 +28,16 @@ async def proxy_embeddings(request: Request):
             json=body,
             timeout=120,
         )
-    return JSONResponse(content=resp.json(), status_code=resp.status_code)
+    # 将 embedding 字段从 float list 转成 base64，jina.py 需要这个格式
+    result = resp.json()
+    for item in result.get("data", []):
+        emb = item.get("embedding")
+        if isinstance(emb, list):
+            arr = np.array(emb, dtype=np.float32)
+            item["embedding"] = base64.b64encode(arr.tobytes()).decode("ascii")
+
+    return JSONResponse(content=result, status_code=resp.status_code)
+
 
 # 透传其他路由（/health 等）
 @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
