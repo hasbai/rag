@@ -1,0 +1,23 @@
+services:
+  jina-embed:
+    image: ghcr.io/ggml-org/llama.cpp:server
+    volumes:
+      - ./models:/models:ro
+    command: >
+      --model /models/jina-embeddings-v5-text-small-retrieval.Q4_K_M.gguf
+      --embedding --pooling last --ctx-size 32768
+      --host 0.0.0.0 --port 8080
+    # 注意：不对外暴露端口，只让代理访问
+
+  embed-proxy:
+    build: .
+    ports:
+      - "8002:8080"
+    depends_on:
+      - jina-embed
+
+  lightrag:
+    image: your-lightrag-image
+    depends_on:
+      - embed-proxy
+    env_file: .env
